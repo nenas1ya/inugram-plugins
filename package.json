@@ -1,0 +1,15 @@
+{
+  "name": "inugram-plugins",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "inu build",
+    "check": "inu check",
+    "dev": "inu dev"
+  },
+  "devDependencies": {
+    "@inugram/cli": "^49.0.0",
+    "@inugram/plugin-types": "^49.0.0",
+    "typescript": "^5.9.3"
+  }
+}
