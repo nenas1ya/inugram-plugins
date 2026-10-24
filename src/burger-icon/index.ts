@@ -54,21 +54,25 @@ function getSource(): Source {
   return localStorage.getItem(SOURCE_KEY) === 'text' ? 'text' : 'icon'
 }
 
-function getIconName(): string {
+function getIconName(): string | null {
   const stored = localStorage.getItem(ICON_KEY)
   if (stored !== null && ICON_NAMES.includes(stored)) return stored
-  return ICON_NAMES.includes(DEFAULT_ICON) ? DEFAULT_ICON : ICON_NAMES[0]
+  if (ICON_NAMES.includes(DEFAULT_ICON)) return DEFAULT_ICON
+  return ICON_NAMES[0] ?? null
 }
 
 function getText(): string {
   return localStorage.getItem(TEXT_KEY) ?? DEFAULT_TEXT
 }
 
+function createReplacement(): JavaObject | null {
+  if (getSource() === 'text') return createTextDrawable(getText())
+  const name = getIconName()
+  return name === null ? null : createIconDrawable(name)
+}
+
 function applyReplacement(): void {
-  const drawable = getSource() === 'text'
-    ? createTextDrawable(getText())
-    : createIconDrawable(getIconName())
-  replacement.call('set', drawable)
+  replacement.call('set', createReplacement())
   AndroidUtilities.callStatic('runOnUIThread', redraw)
 }
 
@@ -92,15 +96,20 @@ function sourceSettings(): inu.UIElement[] {
     ]
   }
 
+  const iconName = getIconName()
+  if (iconName === null) {
+    return [inu.ui.separator('Не удалось найти иконки Telegram')]
+  }
+
   return [
     inu.ui.button({
       id: 'icon',
       text: 'Иконка',
-      icon: inu.android.resourceIcon(getIconName()),
-      value: getIconName().slice(ICON_PREFIX.length),
+      icon: inu.android.resourceIcon(iconName),
+      value: iconName.slice(ICON_PREFIX.length),
       onClick: async () => {
         try {
-          const name = await pickIcon(getIconName())
+          const name = await pickIcon(iconName)
           if (name === null) return
           localStorage.setItem(ICON_KEY, name)
           applyReplacement()

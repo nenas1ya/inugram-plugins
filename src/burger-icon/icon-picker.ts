@@ -1,4 +1,4 @@
-import { ICON_NAMES, javaIconIds, javaIconNames } from './sources/icon.js'
+import { ICON_NAMES, javaIconNames, PACKAGE_NAME, resources } from './sources/icon.js'
 
 const AndroidUtilities = inu.jvm.cls('org.telegram.messenger.AndroidUtilities')
 const LaunchActivity = inu.jvm.cls('org.telegram.ui.LaunchActivity')
@@ -52,7 +52,8 @@ const IconAdapter = inu.jvm.defineClass({
           cell.setScaleType(SCALE_CENTER)
           cell.setLayoutParams(new CellLayoutParams(-1, CELL_SIZE))
         }
-        const icon = parent.getContext().getDrawable(javaIconIds.get(position)).mutate()
+        const id = resources.getIdentifier(javaIconNames.get(position), 'drawable', PACKAGE_NAME)
+        const icon = parent.getContext().getDrawable(id).mutate()
         icon.setTint(Theme.getColor(ICON_COLOR_KEY))
         cell.setImageDrawable(icon)
         cell.setBackground(position === selected.get() ? selectionBackground : null)
