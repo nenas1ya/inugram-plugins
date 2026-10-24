@@ -108,7 +108,7 @@ export async function pickIcon(current: string): Promise<string | null> {
   if (typeof inu.android.nativeView !== 'function') throw new Error('this Inugram has no inu.android.nativeView')
 
   selected.call('set', ICON_NAMES.indexOf(current))
-  selectionBackground.call('setStroke', dp(2), Theme.getColor(ACCENT_COLOR_KEY))
+  selectionBackground.call('setStroke', dp(2), Theme.callStatic('getColor', ACCENT_COLOR_KEY))
 
   const grid = await onUiThread(createGrid)
   const answer = await inu.ui.dialog({
