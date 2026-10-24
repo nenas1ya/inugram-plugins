@@ -99,11 +99,16 @@ function sourceSettings(): inu.UIElement[] {
       icon: inu.android.resourceIcon(getIconName()),
       value: getIconName().slice(ICON_PREFIX.length),
       onClick: async () => {
-        const name = await pickIcon(getIconName())
-        if (name === null) return
-        localStorage.setItem(ICON_KEY, name)
-        applyReplacement()
-        page.invalidate()
+        try {
+          const name = await pickIcon(getIconName())
+          if (name === null) return
+          localStorage.setItem(ICON_KEY, name)
+          applyReplacement()
+          page.invalidate()
+        } catch (error) {
+          console.error('icon picker failed', error)
+          inu.ui.toast(`Ошибка: ${error}`)
+        }
       },
     }),
   ]
