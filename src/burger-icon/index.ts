@@ -116,7 +116,11 @@ function sourceSettings(): inu.UIElement[] {
           page.invalidate()
         } catch (error) {
           console.error('icon picker failed', error)
-          inu.ui.toast(`Ошибка: ${error}`)
+          void inu.ui.dialog({
+            title: 'Ошибка выбора иконки',
+            message: error instanceof Error ? `${error}\n\n${error.stack}` : String(error),
+            positive: 'OK',
+          })
         }
       },
     }),
