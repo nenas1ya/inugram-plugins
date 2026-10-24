@@ -5,6 +5,7 @@ const LaunchActivity = inu.jvm.cls('org.telegram.ui.LaunchActivity')
 const Theme: any = inu.jvm.cls('org.telegram.ui.ActionBar.Theme')
 const AtomicInteger = inu.jvm.cls('java.util.concurrent.atomic.AtomicInteger')
 const BaseAdapter = inu.jvm.cls('android.widget.BaseAdapter')
+const BottomSheet = inu.jvm.cls('org.telegram.ui.ActionBar.BottomSheet')
 const GridView = inu.jvm.cls('android.widget.GridView')
 const ImageView = inu.jvm.cls('android.widget.ImageView')
 const FrameLayout = inu.jvm.cls('android.widget.FrameLayout')
@@ -16,7 +17,7 @@ const OnItemClickListener = inu.jvm.cls('android.widget.AdapterView$OnItemClickL
 const dp = (value: number): number => AndroidUtilities.callStatic('dp', value)
 
 const CELL_SIZE = dp(48)
-const GRID_HEIGHT = dp(360)
+const GRID_HEIGHT = dp(420)
 const SCALE_CENTER = inu.jvm.cls('android.widget.ImageView$ScaleType').getStaticField('CENTER')
 const ICON_COLOR_KEY: number = Theme.getStaticField('key_dialogIcon')
 const ACCENT_COLOR_KEY: number = Theme.getStaticField('key_featuredStickers_addButton')
@@ -64,12 +65,15 @@ const IconAdapter = inu.jvm.defineClass({
 })
 const adapter = new IconAdapter()
 
+let currentSheet: JavaObject | null = null
+let finishPick: (name: string | null) => void = () => {}
+
 const ClickListener = inu.jvm.defineClass({
   interfaces: [OnItemClickListener],
   methods: {
     onItemClick: (_self, _parent, _view, position: number) => {
-      selected.call('set', position)
-      adapter.call('notifyDataSetChanged')
+      finishPick(ICON_NAMES[position])
+      currentSheet?.call('dismiss')
     },
   },
 })
@@ -87,9 +91,9 @@ function onUiThread<T>(work: () => T): Promise<T> {
   })
 }
 
-function createGrid(): JavaObject {
-  const context = LaunchActivity.getStaticField('instance')
-  const grid = new GridView(context)
+function showSheet(): void {
+  const activity = LaunchActivity.getStaticField('instance')
+  const grid = new GridView(activity)
   grid.call('setNumColumns', GridView.getStaticField('AUTO_FIT'))
   grid.call('setColumnWidth', CELL_SIZE)
   grid.call('setStretchMode', GridView.getStaticField('STRETCH_COLUMN_WIDTH'))
@@ -97,24 +101,26 @@ function createGrid(): JavaObject {
   grid.call('setOnItemClickListener', clickListener)
   grid.call('setSelection', Math.max(selected.call('get'), 0))
 
-  // the dialog puts its body in a ScrollView, which would squash a grid without a fixed height
-  const container = new FrameLayout(context)
+  // the sheet wraps its content height, which would squash a grid without a fixed one
+  const container = new FrameLayout(activity)
   container.call('addView', grid, new FrameLayoutParams(-1, GRID_HEIGHT))
-  return container
+
+  const sheet = new BottomSheet(activity, false)
+  sheet.call('setTitle', 'Иконка')
+  sheet.call('setCustomView', container)
+  // a swipe down would otherwise close the sheet instead of scrolling the grid
+  sheet.call('setCanDismissWithSwipe', false)
+  sheet.call('setOnDismissListener', inu.jvm.runnable(() => finishPick(null)))
+  sheet.call('show')
+  currentSheet = sheet
 }
 
-export async function pickIcon(current: string): Promise<string | null> {
+export function pickIcon(current: string): Promise<string | null> {
   selected.call('set', ICON_NAMES.indexOf(current))
   selectionBackground.call('setStroke', dp(2), Theme.getColor(ACCENT_COLOR_KEY))
 
-  const grid = await onUiThread(createGrid)
-  const answer = await inu.ui.dialog({
-    title: 'Иконка',
-    body: inu.android.nativeView(grid),
-    positive: 'Выбрать',
-    negative: 'Отмена',
+  return new Promise((resolve, reject) => {
+    finishPick = resolve
+    onUiThread(showSheet).catch(reject)
   })
-
-  const index: number = selected.call('get')
-  return answer === 'positive' && index !== -1 ? ICON_NAMES[index] : null
 }
