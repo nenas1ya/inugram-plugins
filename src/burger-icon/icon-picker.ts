@@ -1,4 +1,5 @@
 import { ICON_NAMES, javaIconNames, PACKAGE_NAME, resources } from './sources/icon.js'
+import { onUiThread } from './ui-thread.js'
 
 const AndroidUtilities = inu.jvm.cls('org.telegram.messenger.AndroidUtilities')
 const LaunchActivity = inu.jvm.cls('org.telegram.ui.LaunchActivity')
@@ -75,18 +76,6 @@ const ClickListener = inu.jvm.defineClass({
 })
 const clickListener = new ClickListener()
 
-function onUiThread<T>(work: () => T): Promise<T> {
-  return new Promise((resolve, reject) => {
-    AndroidUtilities.callStatic('runOnUIThread', inu.jvm.runnable(() => {
-      try {
-        resolve(work())
-      } catch (error) {
-        reject(error)
-      }
-    }))
-  })
-}
-
 function createGrid(): JavaObject {
   const activity = LaunchActivity.getStaticField('instance')
   const grid = new GridView(activity)
@@ -104,9 +93,6 @@ function createGrid(): JavaObject {
 }
 
 export async function pickIcon(current: string): Promise<string | null> {
-  if (typeof inu.jvm.runnable !== 'function') throw new Error('this Inugram has no inu.jvm.runnable')
-  if (typeof inu.android.nativeView !== 'function') throw new Error('this Inugram has no inu.android.nativeView')
-
   selected.call('set', ICON_NAMES.indexOf(current))
   selectionBackground.call('setStroke', dp(2), Theme.callStatic('getColor', ACCENT_COLOR_KEY))
 

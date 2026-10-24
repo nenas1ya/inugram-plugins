@@ -1,29 +1,32 @@
+import { pickEmoji } from './emoji-picker.js'
 import { pickIcon } from './icon-picker.js'
+import { createEmojiDrawable } from './sources/emoji.js'
 import { createIconDrawable, ICON_NAMES, ICON_PREFIX } from './sources/icon.js'
-import { createTextDrawable } from './sources/text.js'
+import { onUiThread } from './ui-thread.js'
 
-type Source = 'icon' | 'text'
+type Source = 'icon' | 'emoji'
 
 const SOURCES: { id: Source, title: string }[] = [
   { id: 'icon', title: 'Иконка Telegram' },
-  { id: 'text', title: 'Символ' },
+  { id: 'emoji', title: 'Эмодзи' },
 ]
 
 const SOURCE_KEY = 'source'
 const ICON_KEY = 'icon'
-const TEXT_KEY = 'text'
-const DEFAULT_TEXT = '✦'
+const EMOJI_KEY = 'emoji'
 const DEFAULT_ICON = 'msg_settings'
 
 const MenuDrawable = inu.jvm.cls('org.telegram.ui.ActionBar.MenuDrawable')
 const Theme: any = inu.jvm.cls('org.telegram.ui.ActionBar.Theme')
-const AndroidUtilities = inu.jvm.cls('org.telegram.messenger.AndroidUtilities')
+const AtomicBoolean = inu.jvm.cls('java.util.concurrent.atomic.AtomicBoolean')
 const AtomicReference = inu.jvm.cls('java.util.concurrent.atomic.AtomicReference')
+const InvalidateHolder = inu.jvm.cls('org.telegram.ui.Components.AnimatedEmojiSpan$InvalidateHolder')
 
 const ICON_COLOR_KEY: number = Theme.getStaticField('key_actionBarDefaultIcon')
 
 // the hook runs on the ui thread, so it reads these instead of plugin variables
 const replacement: any = new AtomicReference()
+const tintReplacement: any = new AtomicBoolean(true)
 const lastMenu: any = new AtomicReference()
 
 inu.xposed.hookMethod(MenuDrawable.getDeclaredMethod('draw'), {
@@ -38,20 +41,31 @@ inu.xposed.hookMethod(MenuDrawable.getDeclaredMethod('draw'), {
     if (menu.type !== 0 || menu.typeAnimationProgress < 1) return
 
     icon.setBounds(menu.getBounds())
-    icon.setTint(menu.iconColor === 0 ? Theme.getColor(ICON_COLOR_KEY) : menu.iconColor)
+    if (tintReplacement.get()) {
+      icon.setTint(menu.iconColor === 0 ? Theme.getColor(ICON_COLOR_KEY) : menu.iconColor)
+    }
     icon.setAlpha(menu.alpha)
     icon.draw(ctx.args[0])
     ctx.setReturnValue(null)
   }),
 })
 
-const redraw = inu.jvm.routine(() => {
-  const menu = lastMenu.get()
-  if (menu !== null) menu.invalidateSelf()
+// an animated emoji asks its holders to redraw on every frame and once it has loaded
+const MenuInvalidator = inu.jvm.defineClass({
+  interfaces: [InvalidateHolder],
+  methods: {
+    invalidate: {
+      body: inu.jvm.routine(() => {
+        const menu = lastMenu.get()
+        if (menu !== null) menu.invalidateSelf()
+      }),
+    },
+  },
 })
+const menuInvalidator = new MenuInvalidator()
 
 function getSource(): Source {
-  return localStorage.getItem(SOURCE_KEY) === 'text' ? 'text' : 'icon'
+  return localStorage.getItem(SOURCE_KEY) === 'emoji' ? 'emoji' : 'icon'
 }
 
 function getIconName(): string | null {
@@ -61,41 +75,56 @@ function getIconName(): string | null {
   return ICON_NAMES[0] ?? null
 }
 
-function getText(): string {
-  return localStorage.getItem(TEXT_KEY) ?? DEFAULT_TEXT
+function getEmojiId(): string | null {
+  return localStorage.getItem(EMOJI_KEY)
 }
 
-function createReplacement(): JavaObject | null {
-  if (getSource() === 'text') return createTextDrawable(getText())
-  const name = getIconName()
-  return name === null ? null : createIconDrawable(name)
+let shownEmoji: JavaObject | null = null
+
+function applyReplacement(): Promise<void> {
+  // storage is read here, on the plugin thread; the drawables are made on the ui thread
+  const source = getSource()
+  const iconName = getIconName()
+  const emojiId = getEmojiId()
+
+  return onUiThread(() => {
+    shownEmoji?.call('removeView', menuInvalidator)
+    shownEmoji = null
+
+    let drawable: JavaObject | null = null
+    if (source === 'emoji') {
+      if (emojiId !== null) {
+        drawable = createEmojiDrawable(emojiId)
+        drawable.call('addView', menuInvalidator)
+        shownEmoji = drawable
+      }
+    } else if (iconName !== null) {
+      drawable = createIconDrawable(iconName)
+    }
+
+    tintReplacement.call('set', source === 'icon')
+    replacement.call('set', drawable)
+    lastMenu.call('get')?.call('invalidateSelf')
+  })
 }
 
-function applyReplacement(): void {
-  replacement.call('set', createReplacement())
-  AndroidUtilities.callStatic('runOnUIThread', redraw)
+function showError(title: string, error: unknown): void {
+  console.error(title, error)
+  void inu.ui.dialog({
+    title,
+    message: error instanceof Error ? `${error}\n\n${error.stack}` : String(error),
+    positive: 'OK',
+  })
 }
 
-applyReplacement()
+applyReplacement().catch(error => console.error('could not apply the replacement', error))
 
-function sourceSettings(): inu.UIElement[] {
-  if (getSource() === 'text') {
-    return [
-      inu.ui.button({
-        id: 'text',
-        text: 'Символ',
-        value: getText(),
-        onClick: async () => {
-          const text = await inu.ui.prompt({ title: 'Символ вместо бургера', value: getText(), selectAll: true })
-          if (text === null || text.trim() === '') return
-          localStorage.setItem(TEXT_KEY, text.trim())
-          applyReplacement()
-          page.invalidate()
-        },
-      }),
-    ]
-  }
+inu.onUnload(() => onUiThread(() => {
+  shownEmoji?.call('removeView', menuInvalidator)
+  lastMenu.call('get')?.call('invalidateSelf')
+}))
 
+function iconSettings(): inu.UIElement[] {
   const iconName = getIconName()
   if (iconName === null) {
     return [inu.ui.separator('Не удалось найти иконки Telegram')]
@@ -112,15 +141,33 @@ function sourceSettings(): inu.UIElement[] {
           const name = await pickIcon(iconName)
           if (name === null) return
           localStorage.setItem(ICON_KEY, name)
-          applyReplacement()
+          await applyReplacement()
           page.invalidate()
         } catch (error) {
-          console.error('icon picker failed', error)
-          void inu.ui.dialog({
-            title: 'Ошибка выбора иконки',
-            message: error instanceof Error ? `${error}\n\n${error.stack}` : String(error),
-            positive: 'OK',
-          })
+          showError('Ошибка выбора иконки', error)
+        }
+      },
+    }),
+  ]
+}
+
+function emojiSettings(): inu.UIElement[] {
+  const emojiId = getEmojiId()
+  return [
+    inu.ui.button({
+      id: 'emoji',
+      text: 'Эмодзи',
+      icon: emojiId === null ? undefined : inu.icons.customEmoji(emojiId),
+      value: emojiId === null ? 'не выбран' : undefined,
+      onClick: async () => {
+        try {
+          const id = await pickEmoji()
+          if (id === null) return
+          localStorage.setItem(EMOJI_KEY, id)
+          await applyReplacement()
+          page.invalidate()
+        } catch (error) {
+          showError('Ошибка выбора эмодзи', error)
         }
       },
     }),
@@ -137,10 +184,10 @@ const page = inu.ui.settingsPage({
       selected: SOURCES.findIndex(source => source.id === getSource()),
       onChange: (index) => {
         localStorage.setItem(SOURCE_KEY, SOURCES[index].id)
-        applyReplacement()
+        applyReplacement().catch(error => showError('Ошибка', error))
       },
     }),
-    ...sourceSettings(),
+    ...(getSource() === 'emoji' ? emojiSettings() : iconSettings()),
   ],
 })
 
