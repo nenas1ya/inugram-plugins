@@ -1,4 +1,5 @@
-import { createIconDrawable, ICON_NAMES } from './sources/icon.js'
+import { pickIcon } from './icon-picker.js'
+import { createIconDrawable, ICON_NAMES, ICON_PREFIX } from './sources/icon.js'
 import { createTextDrawable } from './sources/text.js'
 
 type Source = 'icon' | 'text'
@@ -92,15 +93,17 @@ function sourceSettings(): inu.UIElement[] {
   }
 
   return [
-    inu.ui.select({
+    inu.ui.button({
       id: 'icon',
       text: 'Иконка',
       icon: inu.android.resourceIcon(getIconName()),
-      items: ICON_NAMES,
-      selected: ICON_NAMES.indexOf(getIconName()),
-      onChange: (index) => {
-        localStorage.setItem(ICON_KEY, ICON_NAMES[index])
+      value: getIconName().slice(ICON_PREFIX.length),
+      onClick: async () => {
+        const name = await pickIcon(getIconName())
+        if (name === null) return
+        localStorage.setItem(ICON_KEY, name)
         applyReplacement()
+        page.invalidate()
       },
     }),
   ]

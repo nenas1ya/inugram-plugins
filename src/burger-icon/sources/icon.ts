@@ -1,4 +1,4 @@
-const ICON_PREFIX = 'msg_'
+export const ICON_PREFIX = 'msg_'
 
 const ApplicationLoader = inu.jvm.cls('org.telegram.messenger.ApplicationLoader')
 const ArrayList = inu.jvm.cls('java.util.ArrayList')
