@@ -1,4 +1,4 @@
-import { createIconDrawable, ICONS } from './sources/icon.js'
+import { createIconDrawable, ICON_NAMES } from './sources/icon.js'
 import { createTextDrawable } from './sources/text.js'
 
 type Source = 'icon' | 'text'
@@ -12,6 +12,7 @@ const SOURCE_KEY = 'source'
 const ICON_KEY = 'icon'
 const TEXT_KEY = 'text'
 const DEFAULT_TEXT = '✦'
+const DEFAULT_ICON = 'msg_settings'
 
 const MenuDrawable = inu.jvm.cls('org.telegram.ui.ActionBar.MenuDrawable')
 const Theme: any = inu.jvm.cls('org.telegram.ui.ActionBar.Theme')
@@ -52,9 +53,10 @@ function getSource(): Source {
   return localStorage.getItem(SOURCE_KEY) === 'text' ? 'text' : 'icon'
 }
 
-function getIconIndex(): number {
-  const index = ICONS.findIndex(option => option.resource === localStorage.getItem(ICON_KEY))
-  return index === -1 ? 0 : index
+function getIconName(): string {
+  const stored = localStorage.getItem(ICON_KEY)
+  if (stored !== null && ICON_NAMES.includes(stored)) return stored
+  return ICON_NAMES.includes(DEFAULT_ICON) ? DEFAULT_ICON : ICON_NAMES[0]
 }
 
 function getText(): string {
@@ -64,7 +66,7 @@ function getText(): string {
 function applyReplacement(): void {
   const drawable = getSource() === 'text'
     ? createTextDrawable(getText())
-    : createIconDrawable(ICONS[getIconIndex()].resource)
+    : createIconDrawable(getIconName())
   replacement.call('set', drawable)
   AndroidUtilities.callStatic('runOnUIThread', redraw)
 }
@@ -89,16 +91,15 @@ function sourceSettings(): inu.UIElement[] {
     ]
   }
 
-  const icon = ICONS[getIconIndex()]
   return [
     inu.ui.select({
       id: 'icon',
       text: 'Иконка',
-      icon: inu.android.resourceIcon(icon.resource),
-      items: ICONS.map(option => option.title),
-      selected: getIconIndex(),
+      icon: inu.android.resourceIcon(getIconName()),
+      items: ICON_NAMES,
+      selected: ICON_NAMES.indexOf(getIconName()),
       onChange: (index) => {
-        localStorage.setItem(ICON_KEY, ICONS[index].resource)
+        localStorage.setItem(ICON_KEY, ICON_NAMES[index])
         applyReplacement()
       },
     }),
