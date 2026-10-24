@@ -3,6 +3,7 @@ export const ICON_PREFIX = 'msg_'
 const ApplicationLoader = inu.jvm.cls('org.telegram.messenger.ApplicationLoader')
 const ArrayList = inu.jvm.cls('java.util.ArrayList')
 const JavaString = inu.jvm.cls('java.lang.String')
+const Runnable = inu.jvm.cls('java.lang.Runnable')
 
 const context: any = ApplicationLoader.getStaticField('applicationContext')
 
@@ -16,7 +17,8 @@ const collectIconNames = inu.jvm.routine(() => {
     if (name.startsWith(ICON_PREFIX)) javaIconNames.add(name)
   }
 })
-collectIconNames.call('run')
+// the routine's own class belongs to the engine and is off limits, so run it through the interface
+Runnable.getDeclaredMethod('run').invoke(collectIconNames)
 
 export const ICON_NAMES: string[] = javaIconNames.call('isEmpty')
   ? []

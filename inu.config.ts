@@ -19,7 +19,7 @@ export default defineConfig({
         id: 'com.github.nenas1ya.burger-icon',
         name: 'Burger Icon',
         author: '@nst137',
-        version: '0.4.0',
+        version: '0.4.1',
         description: {
           en: 'Replaces the burger menu icon in the chat list',
           ru: 'Меняет иконку бургер-меню в списке чатов',
