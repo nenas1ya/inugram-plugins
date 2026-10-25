@@ -17,6 +17,8 @@ const EMOJI_KEY = 'emoji'
 const DEFAULT_ICON = 'msg_settings'
 
 const MenuDrawable = inu.jvm.cls('org.telegram.ui.ActionBar.MenuDrawable')
+const ActionBar = inu.jvm.cls('org.telegram.ui.ActionBar.ActionBar')
+const ImageView = inu.jvm.cls('android.widget.ImageView')
 const Theme: any = inu.jvm.cls('org.telegram.ui.ActionBar.Theme')
 const AtomicBoolean = inu.jvm.cls('java.util.concurrent.atomic.AtomicBoolean')
 const AtomicReference = inu.jvm.cls('java.util.concurrent.atomic.AtomicReference')
@@ -36,6 +38,9 @@ inu.xposed.hookMethod(MenuDrawable.getDeclaredMethod('draw'), {
 
     const icon = replacement.get()
     if (icon === null) return
+    // the same drawable is the bots' menu button next to the message field; only the action bar one is replaced
+    const host = menu.getCallback()
+    if (!(host instanceof ImageView) || !(host.getParent() instanceof ActionBar)) return
     // rotation and type animations advance inside the original draw, so only a resting burger is replaced
     if (menu.currentRotation !== 0 || menu.finalRotation !== 0) return
     if (menu.type !== 0 || menu.typeAnimationProgress < 1) return
