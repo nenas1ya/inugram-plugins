@@ -39,8 +39,8 @@ inu.xposed.hookMethod(MenuDrawable.getDeclaredMethod('draw'), {
     const icon = replacement.get()
     if (icon === null) return
     // the same drawable is the bots' menu button next to the message field; only the action bar one is replaced
-    const host = menu.getCallback()
-    if (!(host instanceof ImageView) || !(host.getParent() instanceof ActionBar)) return
+    if (!(menu.getCallback() instanceof ImageView)) return
+    if (!(menu.getCallback().getParent() instanceof ActionBar)) return
     // rotation and type animations advance inside the original draw, so only a resting burger is replaced
     if (menu.currentRotation !== 0 || menu.finalRotation !== 0) return
     if (menu.type !== 0 || menu.typeAnimationProgress < 1) return
